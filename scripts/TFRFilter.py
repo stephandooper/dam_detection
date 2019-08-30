@@ -6,21 +6,79 @@ Created on Wed Aug 28 14:36:58 2019
 """
 
 import tensorflow as tf
-
-from tensorflow.python.data.ops.dataset_ops import DatasetV1Adapter
-from tensorflow.python.data.ops.readers import TFRecordDatasetV1
 tf.enable_eager_execution()
-
 from multiprocessing.pool import Pool
-from itertools import product, repeat
+from multiprocessing import cpu_count
+import random
+import os
 
 
-train_path = '../data/training_WaterEdges.gz'
-test_path = '../data/testing_WaterEdges.gz'
-proto_path = '../data/customer_1.tfrecord'
+def load_dataset(filename, num_calls = tf.data.experimental.AUTOTUNE, compression=None):
+    ''' Load a TFRecord dataset 
+    
+    Yields a dataset from a filename
+    
+    Args:
+        filename: the target path containing the path and the filename to the tensor
+        
+    Returns 
+        A mapped dataset specified by parse_tfrecord
+    '''
+    
+    def parse_tfrecord(example_proto):
+        ''' Parses a single example from the protobuffer
+        
+        Args:
+            example_proto: a serialized example
+        
+        returns:
+            A mapping (dictionary) to the features specified in featuresDict
+        '''
+        featuresDict = {
+            'B2': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # B
+            'B3': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # G
+            'B4': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # R
+            #'AVE': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # Elevation
+            #'NDVI': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # vegetation index
+            'class': tf.io.FixedLenFeature([1], dtype=tf.float32)
+        }
+        return tf.io.parse_single_example(example_proto, featuresDict)
+
+    dataset = tf.data.TFRecordDataset(filename, compression_type=compression)
+    return(dataset.map(parse_tfrecord, num_parallel_calls=num_calls))
 
 
-# THIS WORKS, UNDERSTAND THE LOGIC!!!
+
+def wrapped_feature(feature):
+    ''' Creates a feature to write to TFRecord
+    
+    Args:
+        feature: a tuple with the feature and the index. The index is added to visualize the sample randomness later on
+    
+    returns: 
+        a feature that is writable to a TFRecord
+    '''
+    #Quick little fix for multiprocessing...
+    i = feature[0]
+    feature = feature[1]
+    def create_feature(feature):
+        ''' creates an example
+        
+        Args:
+            feature the feature to be processed
+        '''
+        # Create the Example
+        example = tf.train.Example(features=tf.train.Features(feature={
+            'B2': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B2'].numpy().flatten())), 
+            'B3': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B3'].numpy().flatten())),
+            'B4': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B4'].numpy().flatten())),
+            'class': tf.train.Feature(float_list=tf.train.FloatList(value=feature['class'].numpy())),
+            'index': tf.train.Feature(int64_list=tf.train.Int64List(value=[i]))
+        }))
+        return example
+    return create_feature(feature)
+
+
 class suppressed_iterator:
     def __init__(self, wrapped_iter, skipped_exc = tf.errors.InvalidArgumentError):
         self.wrapped_iter = wrapped_iter
@@ -43,51 +101,110 @@ class suppressed_generator:
     def __iter__(self):
         return suppressed_iterator(iter(self.wrapped_obj), self.skipped_exc)
 
-def load_dataset(filename, compression=None):
-    '''
+
+class TFRecordGenerator:
+    ''' Class for generating tfrecord: from https://colab.research.google.com/
+    github/christianmerkwirth/colabs/blob/master/
+    Understanding_Randomization_in_TF_Datasets.ipynb#scrollTo=pS0ihDFTd1uI
+    
+    creates a sharded set of TRFecords from a single TFRecord
     
     '''
-    
-    def parse_tfrecord(example_proto):
-        featuresDict = {
-            'B2': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # B
-            'B3': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # G
-            'B4': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # R
-            #'AVE': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # Elevation
-            #'NDVI': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # vegetation index
-            'class': tf.io.FixedLenFeature([1], dtype=tf.float32)
-        }
-        return tf.io.parse_single_example(example_proto, featuresDict)
+    def __init__(self, num_shards=10):
+        self.num_shards = num_shards
 
-    dataset = tf.data.TFRecordDataset(filename, compression_type=compression)
-    print(dataset)
-    dataset = dataset.map(parse_tfrecord, num_parallel_calls=4)
-    return dataset
+    def _pick_output_shard(self):
+        return random.randint(0, self.num_shards-1)
 
-def create_feature(feature):
-    # Create the Example
-    example = tf.train.Example(features=tf.train.Features(feature={
-        'B2': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B2'].numpy().flatten())), 
-        'B3': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B3'].numpy().flatten())),
-        'B4': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B4'].numpy().flatten())),
-        'class': tf.train.Feature(float_list=tf.train.FloatList(value=feature['class'].numpy()))
-    }))
+    def generate_records(self, dataset, tfrecord_file_name):
+        ''' Creates a set of TFRecords from a TF dataset
+        
+        Args:
+            dataset: the TFRecord dataset to be split into shards
+            tfrecord_file_name: the path to write the TFRecords to
             
-    return example
+        returns:
+            void: writes the new TFRecord shards to the path specified in tfrecord_file_name
+                  if only a filename is specified, then they will be in the directory from where the file is executed.
+        
+        '''
+        writers = []
+        options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
+        for i in range(self.num_shards):
+            writers.append(
+                    tf.python_io.TFRecordWriter("{}-{}-of-{}".format(tfrecord_file_name, i, self.num_shards), options))  
+        counter = 0    
+        for x in enumerate(suppressed_generator(dataset)):
+            example = wrapped_feature(x)
+            writers[self._pick_output_shard()].write(example.SerializeToString())
+            counter += 1
+            
+            if x[0] % 100 == 0:
+                print("Currently at index {}".format(x[0]))
 
+        # Close all files
+        for w in writers:
+            w.close()
+        print("%d records writen" % counter)
+    
+    def generate_records_mp(self, dataset, tfrecord_file_name):
+        ''' Creates a set of TFRecords from a TF dataset in multiprocessing style
+        
+        Args:
+            dataset: the TFRecord dataset to be split into shards
+            tfrecord_file_name: the path to write the TFRecords to
+            
+        returns:
+            void: writes the new TFRecord shards to the path specified in tfrecord_file_name
+                  if only a filename is specified, then they will be in the directory from where the file is executed.
+        
+        warning: the entire single TFRecord is first put into a list, i.e. read into memory. 
+        This can lead to memory errors for large files.
+        
+        '''
+        writers = []
+        options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
+        
+        for i in range(self.num_shards):
+            writers.append(
+                    tf.python_io.TFRecordWriter("{}-{}-of-{}".format(tfrecord_file_name, i, self.num_shards), options))  
+                
+        counter = 0    
+        print("converting TFRecord to list")
+        parser = enumerate(list(suppressed_generator(dataset)))
+        
+        print("starting multiprocessing threads")
+        with Pool(cpu_count()) as p:  
+            for result in p.map(wrapped_feature, parser):
+                writers[self._pick_output_shard()].write(result.SerializeToString())
+                counter +=1 
+        
+        print("multiprocessing completed succesfully, files are in {}".format(tfrecord_file_name))
+        # Close all files
+        for w in writers:
+            w.close()
+        print("%d records writen" % counter)
+        
 
+    
 if __name__ == '__main__':
-    dataset = load_dataset(train_path, compression='GZIP')
+    data_path = os.path.join('..', 'data', )
+    
+    # training and testing locations relative to this scripts location
+    train_file = os.path.join(data_path, 'training_WaterEdges.gz')
+    out_files_train = os.path.join(data_path, 'training_WaterEdges')
+    
+    test_file = os.path.join(data_path, 'testing_WaterEdges.gz')
+    out_files_test = os.path.join(data_path, 'test_WaterEdges')
 
-    print(type(dataset))
-    #print(dataset)
+
     
-    total_examples = 0
-    total_corrupt = 0
-    suppressed_dataset = suppressed_generator(dataset)
+    # split dataset into shards
+    t = TFRecordGenerator(num_shards = 7)
     
-    with Pool(2) as p:
-        with tf.python_io.TFRecordWriter('customer_1.tfrecord') as writer:
-            for result in p.map(create_feature, suppressed_dataset):
-                print("Writing result for ",result.name)
-                writer.write(result.SerializeToString())
+    for infile, outfile in [(train_file, out_files_train), (test_file, out_files_test)]:
+        # load dataset
+        print("loading dataset located in {}".format(infile))
+        dataset = load_dataset(infile, compression='GZIP')
+        t.generate_records_mp(dataset, outfile)
+    
