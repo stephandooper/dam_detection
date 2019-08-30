@@ -6,7 +6,7 @@ Created on Wed Aug 28 14:36:58 2019
 """
 
 import tensorflow as tf
-tf.enable_eager_execution()
+tf.compat.v1.enable_eager_execution()
 from multiprocessing.pool import Pool
 from multiprocessing import cpu_count
 import random
@@ -129,10 +129,10 @@ class TFRecordGenerator:
         
         '''
         writers = []
-        options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
+        options = tf.io.TFRecordOptions(tf.compat.v1.python_io.TFRecordCompressionType.GZIP)
         for i in range(self.num_shards):
             writers.append(
-                    tf.io.TFRecordWriter("{}-{}-of-{}".format(tfrecord_file_name, i, self.num_shards), options))  
+                    tf.io.TFRecordWriter("{}-{}-of-{}.gz".format(tfrecord_file_name, i, self.num_shards), options))  
         counter = 0    
         for x in enumerate(suppressed_generator(dataset)):
             example = wrapped_feature(x)
@@ -163,11 +163,11 @@ class TFRecordGenerator:
         
         '''
         writers = []
-        options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
+        options = tf.io.TFRecordOptions(tf.compat.v1.python_io.TFRecordCompressionType.GZIP)
         
         for i in range(self.num_shards):
             writers.append(
-                    tf.io.TFRecordWriter("{}-{}-of-{}".format(tfrecord_file_name, i, self.num_shards), options))  
+                    tf.io.TFRecordWriter("{}-{}-of-{}.gz".format(tfrecord_file_name, i, self.num_shards), options))  
                 
         counter = 0    
         print("converting TFRecord to list")
