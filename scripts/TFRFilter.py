@@ -188,14 +188,15 @@ class TFRecordGenerator:
 
     
 if __name__ == '__main__':
-    data_path = os.path.join('..', 'data', )
+    data_path = os.path.join('..', 'data', 'raw')
+    out_path = os.path.join('..', 'data')
     
     # training and testing locations relative to this scripts location
     train_file = os.path.join(data_path, 'training_WaterEdges.gz')
-    out_files_train = os.path.join(data_path, 'training_WaterEdges')
+    out_files_train = os.path.join(out_path, 'training_WaterEdges')
     
     test_file = os.path.join(data_path, 'testing_WaterEdges.gz')
-    out_files_test = os.path.join(data_path, 'test_WaterEdges')
+    out_files_test = os.path.join(out_path, 'test_WaterEdges')
 
 
     
