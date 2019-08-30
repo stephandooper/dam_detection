@@ -174,7 +174,7 @@ class TFRecordGenerator:
         parser = enumerate(list(suppressed_generator(dataset)))
         
         print("starting multiprocessing threads")
-        with Pool(cpu_count()) as p:  
+        with Pool(10) as p:  
             for result in p.map(wrapped_feature, parser):
                 writers[self._pick_output_shard()].write(result.SerializeToString())
                 counter +=1 
