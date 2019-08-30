@@ -132,7 +132,7 @@ class TFRecordGenerator:
         options = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.GZIP)
         for i in range(self.num_shards):
             writers.append(
-                    tf.python_io.TFRecordWriter("{}-{}-of-{}".format(tfrecord_file_name, i, self.num_shards), options))  
+                    tf.io.TFRecordWriter("{}-{}-of-{}".format(tfrecord_file_name, i, self.num_shards), options))  
         counter = 0    
         for x in enumerate(suppressed_generator(dataset)):
             example = wrapped_feature(x)
@@ -167,7 +167,7 @@ class TFRecordGenerator:
         
         for i in range(self.num_shards):
             writers.append(
-                    tf.python_io.TFRecordWriter("{}-{}-of-{}".format(tfrecord_file_name, i, self.num_shards), options))  
+                    tf.io.TFRecordWriter("{}-{}-of-{}".format(tfrecord_file_name, i, self.num_shards), options))  
                 
         counter = 0    
         print("converting TFRecord to list")
