@@ -103,8 +103,9 @@ if __name__ == '__main__':
     # filter out the results we do not need, i.e. no data
     states = filter(lambda x: x is not None, states)
     # filter out any bridge without any nav control: bridges not over a waterway
+    states = filter(lambda x: x['LON'] < -56 and x['LON'] > -173, states )
     states = list(filter(lambda x: x['NAVIGATIONAL_CONTROL'] == '1', states))
-        
+
     # these commented out give a similar result, but sometimes far away from actual water...
     # since some of these bridges have a very long approach
     #z = list(filter(lambda x: x['CHANNEL_PROTECTION'] != 'N', z))
@@ -125,3 +126,4 @@ if __name__ == '__main__':
     print(w.recNum == w.shpNum)
     
     w.close()
+    print("written shapefile")
