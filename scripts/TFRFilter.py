@@ -117,7 +117,7 @@ class TFRecordGenerator:
         return random.randint(0, self.num_shards-1)
 
     def generate_records(self, dataset, tfrecord_file_name):
-        ''' Creates a set of TFRecords from a TF dataset
+        ''' Creates num_shards TFRecords from a TF dataset
         
         Args:
             dataset: the TFRecord dataset to be split into shards
@@ -184,10 +184,104 @@ class TFRecordGenerator:
         for w in writers:
             w.close()
         print("%d records writen" % counter)
+    
+    @staticmethod 
+    def generate_records_per_batch(dataset, num_samples, tfrecord_file_name):
+        ''' Creates x TFRecords, where each records aims to hold num_samples 
+        
+        '''
+        writers = []
+        options = tf.io.TFRecordOptions(tf.compat.v1.python_io.TFRecordCompressionType.GZIP)
+
+        writers.append(tf.io.TFRecordWriter("{}-{}.gz".format(tfrecord_file_name, 0), options))  
+        
+        counter = 0   
+        file_incr = 1
+        record_incr = 0
+        for x in enumerate(suppressed_generator(dataset)):
+            # Open and write a new tfrecord file
+            if record_incr == num_samples:
+                writers.append(tf.io.TFRecordWriter("{}-{}.gz".format(tfrecord_file_name, file_incr), options))
+                file_incr +=1
+                record_incr = 0
+                
+            example = wrapped_feature(x)
+            writers[-1].write(example.SerializeToString())
+            counter += 1
+            record_incr +=1
+            
+            # status report
+            if x[0] % 5 == 0:
+                print("Currently at index {}".format(x[0]))
+
+        # Close all files
+        for w in writers:
+            w.close()
+        print("%d records writen" % counter)
+        
+    @staticmethod
+    def generate_records_per_batch_mp(dataset, num_samples, tfrecord_file_name):
+        ''' Creates a set of TFRecords from a TF dataset in multiprocessing style
+        
+        Args:
+            dataset: the TFRecord dataset to be split into shards
+            tfrecord_file_name: the path to write the TFRecords to
+            
+        returns:
+            void: writes the new TFRecord shards to the path specified in tfrecord_file_name
+                  if only a filename is specified, then they will be in the directory from where the file is executed.
+        
+        warning: the entire single TFRecord is first put into a list, i.e. read into memory. 
+        This can lead to memory errors for large files.
+        
+        '''
+        writers = []
+        options = tf.io.TFRecordOptions(tf.compat.v1.python_io.TFRecordCompressionType.GZIP)
         
 
+        writers.append(tf.io.TFRecordWriter("{}-{}.gz".format(tfrecord_file_name, 0), options))  
+                
+        counter = 0    
+        print("converting TFRecord to list")
+        parser = enumerate(list(suppressed_generator(dataset)))
+        
+        print("starting multiprocessing threads")
+        file_incr = 1
+        record_incr = 0
+        with Pool(10) as p:  
+            for result in p.map(wrapped_feature, parser):
+                
+                if record_incr == num_samples:
+                    print("writing {}-{}".format(tfrecord_file_name, file_incr) )
+                    writers.append(tf.io.TFRecordWriter("{}-{}.gz".format(tfrecord_file_name, file_incr), options))
+                    file_incr +=1
+                    record_incr = 0
+                    
+                writers[-1].write(result.SerializeToString())   
+                record_incr+=1
+                
+                counter +=1 
+        
+        print("multiprocessing completed succesfully, files are in {}".format(tfrecord_file_name))
+        # Close all files
+        for w in writers:
+            w.close()
+        print("%d records writen" % counter)
+        
+        
     
 if __name__ == '__main__':
+    path = '../data/8.gz'
+    
+    print("loading dataset")
+    dataset = load_dataset(path, compression='GZIP')
+    
+    for i,x in enumerate(dataset):
+        print(i)
+    print("sharding")
+    TFRecordGenerator.generate_records_per_batch_mp(dataset, 2, 'test')
+
+    '''
     data_path = os.path.join('..', 'data', 'raw')
     out_path = os.path.join('..', 'data')
     
@@ -198,7 +292,6 @@ if __name__ == '__main__':
     test_file = os.path.join(data_path, 'testing_WaterEdges.gz')
     out_files_test = os.path.join(out_path, 'test_WaterEdges')
 
-
     
     # split dataset into shards
     t = TFRecordGenerator(num_shards = 7)
@@ -208,4 +301,4 @@ if __name__ == '__main__':
         print("loading dataset located in {}".format(infile))
         dataset = load_dataset(infile, compression='GZIP')
         t.generate_records_mp(dataset, outfile)
-    
+    '''
