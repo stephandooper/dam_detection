@@ -5,15 +5,31 @@ Created on Fri Aug 30 16:56:01 2019
 @author: Stephan
 """
 import os
-cwd = os.getcwd()
-print(cwd)
+import errno
 
 from google_drive_downloader import GoogleDriveDownloader as gdd
 
+files = {'dams': '19al1uB5HeKGo34lERAJMY3OPnuMk-vLV', 
+         'bridges': '1CJJIZ-qVzUdWlYL3PncgxUEM9wTncRlX',
+         'other': '1aaqIzziVrVkgSZbTFV_vo7VJVu0EYBWc'}
 
-gdd.download_file_from_google_drive(file_id='1rBgrHwfvoEVjrhs8M41yzIiy6vDIpYAi',
-                                    dest_path=os.path.join(cwd,'waterdges.zip'),
-                                    unzip=True,
-                                    showsize=True)
+def download_file(file_id, dest_path, *args, **kwargs):
+    if os.path.exists(dest_path):
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), dest_path)
+        
+    gdd.download_file_from_google_drive(file_id= file_id,
+                                    dest_path= dest_path,
+                                    unzip=False,
+                                    showsize=True,
+                                    overwrite=False)
 
-print("done?")
+
+for file in files.items():
+    dest_path = '../data/raw/' + str(file[0]) +'.gz'    
+    try:
+        download_file(file[1], dest_path)
+        print("downloading {}  into {} with link {}".format(file[0], dest_path, file[1]))
+    except FileNotFoundError:
+        print("file {} already exists, not overwriting".format(dest_path))
+
+print("done downloading files")
