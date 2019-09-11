@@ -9,9 +9,10 @@ import errno
 
 from google_drive_downloader import GoogleDriveDownloader as gdd
 
-files = {'dams': '19al1uB5HeKGo34lERAJMY3OPnuMk-vLV', 
-         'bridges': '1CJJIZ-qVzUdWlYL3PncgxUEM9wTncRlX',
-         'other': '1aaqIzziVrVkgSZbTFV_vo7VJVu0EYBWc'}
+1ksH6WZkWOSoh4rZhRT1DAsg7LfWp61ZL
+files = {'dams': '1TEgPtclbIaxpSIuva22MvdzTlD6y9BJm', 
+         'bridges': '1ksH6WZkWOSoh4rZhRT1DAsg7LfWp61ZL',
+         'other': '10lFX8Gr6T6eG_kZ6CVcGBZ_nkE1B5sQd'}
 
 def download_file(file_id, dest_path, *args, **kwargs):
     if os.path.exists(dest_path):
