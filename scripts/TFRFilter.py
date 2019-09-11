@@ -38,9 +38,9 @@ def load_dataset(filename, num_calls = tf.data.experimental.AUTOTUNE, compressio
             'B2': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # B
             'B3': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # G
             'B4': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # R
-            #'AVE': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # Elevation
-            #'NDVI': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # vegetation index
-            'class': tf.io.FixedLenFeature([1], dtype=tf.float32)
+            'AVE': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # Elevation
+            #'NDWI': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # water index
+            #'label': tf.io.FixedLenFeature([1], dtype=tf.float32)
         }
         return tf.io.parse_single_example(example_proto, featuresDict)
 
@@ -72,7 +72,9 @@ def wrapped_feature(feature):
             'B2': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B2'].numpy().flatten())), 
             'B3': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B3'].numpy().flatten())),
             'B4': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B4'].numpy().flatten())),
-            'class': tf.train.Feature(float_list=tf.train.FloatList(value=feature['class'].numpy())),
+            'AVE': tf.train.Feature(float_list=tf.train.FloatList(value=feature['AVE'].numpy().flatten())),
+	    #'NDWI': tf.train.Feature(float_list=tf.train.FloatList(value=feature['NDWI'].numpy().flatten())),
+            #'label': tf.train.Feature(float_list=tf.train.FloatList(value=feature['label'].numpy())),
             'index': tf.train.Feature(int64_list=tf.train.Int64List(value=[i]))
         }))
         return example
@@ -248,7 +250,7 @@ class TFRecordGenerator:
         print("starting multiprocessing threads")
         file_incr = 1
         record_incr = 0
-        with Pool(10) as p:  
+        with Pool(15) as p:  
             for result in p.map(wrapped_feature, parser):
                 
                 if record_incr == num_samples:
@@ -271,34 +273,18 @@ class TFRecordGenerator:
         
     
 if __name__ == '__main__':
-    path = '../data/8.gz'
-    
-    print("loading dataset")
-    dataset = load_dataset(path, compression='GZIP')
-    
-    for i,x in enumerate(dataset):
-        print(i)
-    print("sharding")
-    TFRecordGenerator.generate_records_per_batch_mp(dataset, 2, 'test')
 
-    '''
+    data_files = ['bridges.gz'] #['dams.gz', 'other.gz', 'bridges.gz']
     data_path = os.path.join('..', 'data', 'raw')
-    out_path = os.path.join('..', 'data')
+    out_path = os.path.join('..', 'data', 'samples')
     
-    # training and testing locations relative to this scripts location
-    train_file = os.path.join(data_path, 'training_WaterEdges.gz')
-    out_files_train = os.path.join(out_path, 'training_WaterEdges')
+    infiles = list(map(lambda x: os.path.join(data_path, x), data_files))
+    outfiles = list(map(lambda x: os.path.join(out_path, x.split('.')[0]), data_files))
     
-    test_file = os.path.join(data_path, 'testing_WaterEdges.gz')
-    out_files_test = os.path.join(out_path, 'test_WaterEdges')
-
-    
-    # split dataset into shards
-    t = TFRecordGenerator(num_shards = 7)
-    
-    for infile, outfile in [(train_file, out_files_train), (test_file, out_files_test)]:
+    for infile, outfile in zip(infiles, outfiles):
         # load dataset
         print("loading dataset located in {}".format(infile))
         dataset = load_dataset(infile, compression='GZIP')
-        t.generate_records_mp(dataset, outfile)
-    '''
+        TFRecordGenerator.generate_records_per_batch_mp(dataset, 100, outfile)
+	#t = TFRecordGenerator(num_shards =7)
+	#t.generate_records_mp(dataset, outfile)
