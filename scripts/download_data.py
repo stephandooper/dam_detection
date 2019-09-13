@@ -9,7 +9,6 @@ import errno
 
 from google_drive_downloader import GoogleDriveDownloader as gdd
 
-1ksH6WZkWOSoh4rZhRT1DAsg7LfWp61ZL
 files = {'dams': '1TEgPtclbIaxpSIuva22MvdzTlD6y9BJm', 
          'bridges': '1ksH6WZkWOSoh4rZhRT1DAsg7LfWp61ZL',
          'other': '10lFX8Gr6T6eG_kZ6CVcGBZ_nkE1B5sQd'}

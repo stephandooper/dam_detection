@@ -11,7 +11,7 @@ from multiprocessing.pool import Pool
 from multiprocessing import cpu_count
 import random
 import os
-
+import gc
 
 def load_dataset(filename, num_calls = tf.data.experimental.AUTOTUNE, compression=None):
     ''' Load a TFRecord dataset 
@@ -39,8 +39,8 @@ def load_dataset(filename, num_calls = tf.data.experimental.AUTOTUNE, compressio
             'B3': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # G
             'B4': tf.io.FixedLenFeature([257, 257], dtype=tf.float32),  # R
             'AVE': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # Elevation
-            #'NDWI': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # water index
-            #'label': tf.io.FixedLenFeature([1], dtype=tf.float32)
+            'NDWI': tf.io.FixedLenFeature([257, 257], dtype=tf.float32), # water index
+            'label': tf.io.FixedLenFeature([1], dtype=tf.float32)
         }
         return tf.io.parse_single_example(example_proto, featuresDict)
 
@@ -73,8 +73,8 @@ def wrapped_feature(feature):
             'B3': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B3'].numpy().flatten())),
             'B4': tf.train.Feature(float_list=tf.train.FloatList(value=feature['B4'].numpy().flatten())),
             'AVE': tf.train.Feature(float_list=tf.train.FloatList(value=feature['AVE'].numpy().flatten())),
-	    #'NDWI': tf.train.Feature(float_list=tf.train.FloatList(value=feature['NDWI'].numpy().flatten())),
-            #'label': tf.train.Feature(float_list=tf.train.FloatList(value=feature['label'].numpy())),
+	    'NDWI': tf.train.Feature(float_list=tf.train.FloatList(value=feature['NDWI'].numpy().flatten())),
+            'label': tf.train.Feature(float_list=tf.train.FloatList(value=feature['label'].numpy())),
             'index': tf.train.Feature(int64_list=tf.train.Int64List(value=[i]))
         }))
         return example
@@ -274,7 +274,7 @@ class TFRecordGenerator:
     
 if __name__ == '__main__':
 
-    data_files = ['bridges.gz'] #['dams.gz', 'other.gz', 'bridges.gz']
+    data_files = ['dams.gz', 'other.gz', 'bridges.gz']
     data_path = os.path.join('..', 'data', 'raw')
     out_path = os.path.join('..', 'data', 'samples')
     
@@ -286,5 +286,6 @@ if __name__ == '__main__':
         print("loading dataset located in {}".format(infile))
         dataset = load_dataset(infile, compression='GZIP')
         TFRecordGenerator.generate_records_per_batch_mp(dataset, 100, outfile)
-	#t = TFRecordGenerator(num_shards =7)
-	#t.generate_records_mp(dataset, outfile)
+        gc.collect()
+        #t = TFRecordGenerator(num_shards =7)
+        #t.generate_records_mp(dataset, outfile)
