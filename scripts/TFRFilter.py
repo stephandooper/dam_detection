@@ -12,6 +12,37 @@ from multiprocessing import cpu_count
 import random
 import os
 import gc
+from constants import SEED, NUM_FILES_PER_RECORD
+import glob, os, os.path
+
+random.seed(SEED)
+
+# suppressed generators to skip bad files in TFRecords 
+# Bad/invalid entries could potentially also be skipped with the filter method of Dataset
+# https://stackoverflow.com/questions/46254999/skip-dataset-entries-in-tfrecorddataset-map
+class suppressed_iterator:
+    def __init__(self, wrapped_iter, skipped_exc = tf.errors.InvalidArgumentError):
+        self.wrapped_iter = wrapped_iter
+        self.skipped_exc  = skipped_exc
+
+    def __next__(self):
+        while True:
+            try:
+                return next(self.wrapped_iter)
+            except StopIteration:
+                raise
+            except self.skipped_exc:
+                pass
+
+class suppressed_generator:
+    def __init__(self, wrapped_obj, skipped_exc = tf.errors.InvalidArgumentError):
+        self.wrapped_obj = wrapped_obj
+        self.skipped_exc = skipped_exc
+
+    def __iter__(self):
+        return suppressed_iterator(iter(self.wrapped_obj), self.skipped_exc)
+
+
 
 def load_dataset(filename, num_calls = tf.data.experimental.AUTOTUNE, compression=None):
     ''' Load a TFRecord dataset 
@@ -79,29 +110,6 @@ def wrapped_feature(feature):
         }))
         return example
     return create_feature(feature)
-
-
-class suppressed_iterator:
-    def __init__(self, wrapped_iter, skipped_exc = tf.errors.InvalidArgumentError):
-        self.wrapped_iter = wrapped_iter
-        self.skipped_exc  = skipped_exc
-
-    def __next__(self):
-        while True:
-            try:
-                return next(self.wrapped_iter)
-            except StopIteration:
-                raise
-            except self.skipped_exc:
-                pass
-
-class suppressed_generator:
-    def __init__(self, wrapped_obj, skipped_exc = tf.errors.InvalidArgumentError):
-        self.wrapped_obj = wrapped_obj
-        self.skipped_exc = skipped_exc
-
-    def __iter__(self):
-        return suppressed_iterator(iter(self.wrapped_obj), self.skipped_exc)
 
 
 class TFRecordGenerator:
@@ -250,7 +258,7 @@ class TFRecordGenerator:
         print("starting multiprocessing threads")
         file_incr = 1
         record_incr = 0
-        with Pool(15) as p:  
+        with Pool(10) as p:  
             for result in p.map(wrapped_feature, parser):
                 
                 if record_incr == num_samples:
@@ -280,12 +288,32 @@ if __name__ == '__main__':
     
     infiles = list(map(lambda x: os.path.join(data_path, x), data_files))
     outfiles = list(map(lambda x: os.path.join(out_path, x.split('.')[0]), data_files))
-    
-    for infile, outfile in zip(infiles, outfiles):
-        # load dataset
-        print("loading dataset located in {}".format(infile))
-        dataset = load_dataset(infile, compression='GZIP')
-        TFRecordGenerator.generate_records_per_batch_mp(dataset, 100, outfile)
-        gc.collect()
-        #t = TFRecordGenerator(num_shards =7)
-        #t.generate_records_mp(dataset, outfile)
+
+    answer = None
+    while answer not in ("YES", "NO", "Y", "N"):
+        answer = input("WARNING: THIS WILL PURGE ALL .gz FILES IN {}, proceed? [Y/N]: ".format(out_path))
+        if answer.upper() in ("YES", "Y"):
+            print("Answer was yes")
+
+            filelist = glob.glob(os.path.join(out_path, "*.gz"))
+            for f in filelist:
+                os.remove(f)
+
+            for infile, outfile in zip(infiles, outfiles):
+                # load dataset
+                print("loading dataset located in {}".format(infile))
+                dataset = load_dataset(infile, compression='GZIP')
+                TFRecordGenerator.generate_records_per_batch_mp(dataset, NUM_FILES_PER_RECORD, outfile)
+                gc.collect()
+
+                #t = TFRecordGenerator(num_shards =7)
+                #t.generate_records_mp(dataset, outfile)
+
+        elif answer.upper() in ("NO", "N"):
+            print("Answer was no")
+            break
+        else:
+            print("Please enter yes or no.")
+
+print("terminating program")
+
