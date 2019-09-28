@@ -5,8 +5,7 @@ Created on Sat Sep 21 18:49:05 2019
 @author: Stephan
 """
 import tensorflow as tf
-tf.enable_eager_execution()
-from tensorflow.keras import layers, activations
+tf.compat.v1.enable_eager_execution()
 from tensorflow.keras.callbacks import Callback, ReduceLROnPlateau, ModelCheckpoint, EarlyStopping
 
 import pymongo
@@ -17,22 +16,30 @@ from scripts.constants import SEED
 import datetime
 from models.convnet import build_convnet
 from datasets.load_data import load_data
-from generators.tf_parsing import random, validate
+from generators.tf_parsing import create_training_dataset, validate
 
 # TODO: add target size as a variable parameters both in the generators as well as the models
 # TODO: PUT IN ITS OWN GENERATORS FOLDER
-# TODO: BATCH SIZE, VARIABLE TARGET SIZE, CONNECTION WITH GENERATORS
+# TODO: BATCH SIZE, VARIABLE TARGET SIZE
+# TODO: CREATE ACTUAL GENERATORS
 # TODO: VARIABLE TARGET SIZE
 # TODO: CONNECTION WITH GENERATORS
+# TODO: AUGMENTATION
 # TODO: COMPARE WITH ISMI
 # TODO: CLEAN UP CONNECTIONS TO GENERATORS WITH PARAMETERS ETC
-# TODO: Add options in omniboard
+# TODO: ADD OPTIONS IN OMNIBOARD
 # TODO: CONFIG OPTION EXTEND TO BRIDGES (switch from 2 to 3 labels)
 # TODO: CONFIG OPTION RGB IMAGES OR GENERAL CHANNELS
 # TODO: ADD SET_SEED IN GENERATORS WHEREVER POSSIBLE
 
-def run_experiment(config, reproduce_result=None):
 
+
+model_dict = {
+	'convnet': build_convnet
+}
+
+
+def run_experiment(config, reproduce_result=None):
 	# interactive mode for jupyter notebooks, DEACTIVATES REPODUCIBILITY SAFEGUARDS
 	ex = Experiment('DAM')
 
@@ -47,8 +54,7 @@ def run_experiment(config, reproduce_result=None):
 	# add config to ex manually, instead of creating @ex.config functions
 	ex.add_config({'seed': SEED})
 	ex.add_config(config)
-	tf.random.set_random_seed(SEED)
-
+	tf.compat.v1.random.set_random_seed(SEED)
 
 	@ex.capture
 	def my_metrics(_run, logs):
@@ -68,45 +74,50 @@ def run_experiment(config, reproduce_result=None):
 
 	@ex.main
 	def run(_run):
-		# TODO: add target size as a variable parameter with a default (of 257 * 257)
 		# Load configs, if parameters are unspecified, fill in a default
 		config = _run.config		
+		
+		# Get configuration parameters
 		epochs = config.get('epochs')
 		batch_size = config.get('batch_size')
-		lr = config.get('lr',0.001)
+		lr = config.get('lr', 0.001)
+		
+		# get specific model parameters, such as pretrained weights (saved in the keras library)
+		# or target sizes, or channels (which channels to use in the model)
+		model_params = config.get('model_params', {})
+		target_size = model_params.get('target_size', (257, 257))
+		channels = model_params.get('channels')
+		
 		
 		# Load data and define generators ------------------------------------------
-		# TODO: turn load data into general load generators?
 		x_train, y_train, x_val, y_val, x_test, y_test = load_data()
 		
 		# TF parsing functions
-		# Load the TFRecord file
-		print("[!] loading datasets")
-		train_dataset = random(x_train)
-		val_dataset = validate(x_val)
-		test_dataset = validate(x_test)
+		print("[!] loading datasets \n")
+		# Load the dataset iterators
+		train_dataset = create_training_dataset(x_train, batch_size, target_size, channels)
+		val_dataset = validate(x_val, batch_size, target_size, channels)
+		test_dataset = validate(x_test, batch_size, target_size, channels)
 		
 		# Model definitions --------------------------------------------------------
+		print("[!] compiling model and adding callbacks \n")
 		# function for building the model
 		model_func = model_dict[config.get('model')]
 
-		# get specific model parameters, such as pretrained weights (saved in the keras library)
-		model_params = config.get('model_params', {})
-		
-		# TODO: add kwargs
-		# TODO: append the target size to the model params?
+
 		# invoke the user function
 		model = model_func(**model_params)
 		
-		model.compile(optimizer=tf.train.AdamOptimizer(lr),
+		# compile the model with catcrossentropy: one hot encoded labels!!
+		model.compile(optimizer= tf.keras.optimizers.Adam(lr),
 						loss= 'categorical_crossentropy',
 						metrics=['accuracy'])
 		
 		# Model callbacks ----------------------------------------------------------
-		# Add callback functions to the model
+		
 		# ReduceLRonPlateau
 		if config.get('reduce_lr_on_plateau'):
-			reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=4, min_lr=10e-5)
+			reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=4, min_lr=10e-5, verbose=1)
 		else:
 			reduce_lr = Callback()
 
@@ -117,10 +128,13 @@ def run_experiment(config, reproduce_result=None):
 		# if reproduce_result:
 		# modelcheckpoint_name = "../checkpoints/model-{}.hdf5".format(reproduce_result)
 		modelcheckpoint = ModelCheckpoint(modelcheckpoint_name, monitor = 'val_loss', verbose=1, save_best_only=True, save_weights_only=True)
-
+		
+		# Model early stopping
 		earlystopping = EarlyStopping(monitor='val_loss', patience=10)
 		
 		# Model Training and evaluation --------------------------------------------
+		print("[!] fitting model \n")
+
 		model.fit(
 			train_dataset.repeat(), 
 			epochs=epochs, 
@@ -128,10 +142,10 @@ def run_experiment(config, reproduce_result=None):
 			validation_data=val_dataset.repeat(), 
 			validation_steps = 100,
 			shuffle=True,
+			verbose= 1,
 			callbacks = [LogMetrics(), modelcheckpoint, earlystopping, reduce_lr]
 		)
 	
-
 		# Model evaluation
 		print("[!] predicting test set")
         # load optimal weights
@@ -145,22 +159,6 @@ def run_experiment(config, reproduce_result=None):
 		_run.log_scalar("test_acc", float(results[1]))
 		
 	runner = ex.run()
+	
 	return runner     
-
-# TODO: move everything except the model dict to a separate models folder
-
-
-
-config = {'model': 'convnet',
-          'epochs': 2,
-		  'lr': 0.0001,
-		  'batch_size': 32}
-
-model_dict = {
-	'convnet': build_convnet
-}
-
-
-
-run_experiment(config)
 

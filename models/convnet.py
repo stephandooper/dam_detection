@@ -17,19 +17,25 @@ from tensorflow.keras.models import Model
 
 
 def build_convnet(**kwargs): 
-    inputs = Input(shape=(*kwargs.get('target_size', (257, 257)), 3))
-    x = Conv2D(32, (3,3), activation='relu')(inputs)
-    x = Conv2D(64, (3,3), activation='relu')(x)
-    x = MaxPool2D((2,2))(x)
-    x = Conv2D(64, (3,3), activation='relu')(x)
-    x = Conv2D(64, (3,3), activation='relu')(x)
-    x = MaxPool2D((2,2))(x)
-    x = Flatten()(x)
-    x = Dense(64, activation='relu')(x)
-    x = Dense(32, activation='relu')(x)
-    x = Flatten()(x)
-    predictions = Dense(2, activation='softmax')(x)
+	#inputs = Input(shape=(*kwargs.get('target_size', (257, 257)), len(*kwargs.get('channels')) ))
+	print("target size:", kwargs.get('target_size'))
+	print("channels:,", kwargs.get('channels'))
+	
+	print("target size eval:", *kwargs.get('target_size'))
+	print("channels eval:,", *kwargs.get('channels'))
+	inputs = Input(shape=(*kwargs.get('target_size'), len(kwargs.get('channels')) ))
+	x = Conv2D(32, (3,3), activation='relu')(inputs)
+	x = Conv2D(64, (3,3), activation='relu')(x)
+	x = MaxPool2D((2,2))(x)
+	x = Conv2D(64, (3,3), activation='relu')(x)
+	x = Conv2D(64, (3,3), activation='relu')(x)
+	x = MaxPool2D((2,2))(x)
+	x = Flatten()(x)
+	x = Dense(64, activation='relu')(x)
+	x = Dense(32, activation='relu')(x)
+	x = Flatten()(x)
+	predictions = Dense(2, activation='softmax')(x)
 
-    model = Model(inputs = inputs, outputs=predictions)
-    model.summary()
-    return model
+	model = Model(inputs = inputs, outputs=predictions)
+	model.summary()
+	return model
