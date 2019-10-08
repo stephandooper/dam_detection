@@ -16,7 +16,8 @@ from scripts.constants import SEED
 import datetime
 from models.convnet import build_convnet
 from datasets.load_data import load_data
-from generators.tf_parsing import create_training_dataset, validate
+from generators.tf_parsing import create_training_dataset, validate, num_files
+from pprint import pprint
 
 # TODO: add target size as a variable parameters both in the generators as well as the models
 # TODO: PUT IN ITS OWN GENERATORS FOLDER
@@ -31,12 +32,17 @@ from generators.tf_parsing import create_training_dataset, validate
 # TODO: CONFIG OPTION EXTEND TO BRIDGES (switch from 2 to 3 labels)
 # TODO: CONFIG OPTION RGB IMAGES OR GENERAL CHANNELS
 # TODO: ADD SET_SEED IN GENERATORS WHEREVER POSSIBLE
-
+# TODO: BALANCED SAMPLING
 
 
 model_dict = {
 	'convnet': build_convnet
 }
+
+
+def count_files():
+	''' Counts the number of files in total in the dataset'''
+	pass
 
 
 def run_experiment(config, reproduce_result=None):
@@ -76,47 +82,64 @@ def run_experiment(config, reproduce_result=None):
 	def run(_run):
 		# Load configs, if parameters are unspecified, fill in a default
 		config = _run.config		
+
+		run = config.get('fit_params') 
+		model_params = config.get('model_params')   
+		data_params = config.get('data_params')
+		batch_size = data_params.get('batch_size')
+		stretch_colorspace = data_params.get('stretch_colorspace')
+		use_augment = data_params.get('use_augment')
+		bridge_separate = data_params.get('bridge_separate')
+		buffer_size = data_params.get('buffer_size')
+
+		print("[!] list of parameter configurations")
+		pprint(config)
 		
-		# Get configuration parameters
-		epochs = config.get('epochs')
-		batch_size = config.get('batch_size')
-		lr = config.get('lr', 0.001)
 		
-		# get specific model parameters, such as pretrained weights (saved in the keras library)
-		# or target sizes, or channels (which channels to use in the model)
-		model_params = config.get('model_params', {})
-		target_size = model_params.get('target_size', (257, 257))
-		channels = model_params.get('channels')
+		# parameter assertion test
+		if model_params.get('num_classes') not in [2,3]:
+			raise ValueError("num classes must be in 2,3")
+		elif (model_params.get('num_classes') == 2 and bridge_separate) or \
+			(model_params.get('num_classes') ==3 and bridge_separate == False):
+			raise ValueError("this configuration is not possible")
+		else:
+			print("num classes and bridge separate match")
 		
 		
 		# Load data and define generators ------------------------------------------
-		x_train, y_train, x_val, y_val, x_test, y_test = load_data()
+		print("[!] loading datasets \n")
+		x_train, y_train, x_val, y_val, x_test, y_test = load_data(False)
+		
+		# get a rough estimate: there are 100 files per TFRecord
+		# except for one TFRecord per item, so this estimate might not be 100% correct
+		num_training = len(x_train) * 100
 		
 		# TF parsing functions
-		print("[!] loading datasets \n")
+		print("[!] Creating dataset iterators \n")
 		# Load the dataset iterators
-		train_dataset = create_training_dataset(x_train, batch_size, target_size, channels)
-		val_dataset = validate(x_val, batch_size, target_size, channels)
-		test_dataset = validate(x_test, batch_size, target_size, channels)
+		train_dataset = create_training_dataset(x_train, batch_size, bridge_separate,
+                                          buffer_size, use_augment, stretch_colorspace,
+                                          **model_params)
+		val_dataset = validate(x_val, batch_size, bridge_separate, stretch_colorspace, **model_params)
+		test_dataset = validate(x_test, batch_size, bridge_separate, stretch_colorspace, **model_params)
 		
 		# Model definitions --------------------------------------------------------
 		print("[!] compiling model and adding callbacks \n")
 		# function for building the model
-		model_func = model_dict[config.get('model')]
-
+		model_func = model_dict[run.get('model')]
 
 		# invoke the user function
 		model = model_func(**model_params)
 		
 		# compile the model with catcrossentropy: one hot encoded labels!!
-		model.compile(optimizer= tf.keras.optimizers.Adam(lr),
+		model.compile(optimizer= tf.keras.optimizers.Adam(run.get('lr')),
 						loss= 'categorical_crossentropy',
 						metrics=['accuracy'])
 		
 		# Model callbacks ----------------------------------------------------------
 		
 		# ReduceLRonPlateau
-		if config.get('reduce_lr_on_plateau'):
+		if run.get('reduce_lr_on_plateau'):
 			reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=4, min_lr=10e-5, verbose=1)
 		else:
 			reduce_lr = Callback()
@@ -124,10 +147,14 @@ def run_experiment(config, reproduce_result=None):
 		# Model checkpoints
 		now = datetime.datetime.now()
 		date_string = "_".join(map(str, (now.year, now.month, now.day, now.hour, now.minute, now.second)))
-		modelcheckpoint_name= "checkpoints/model-{}-{}.hdf5".format(config.get('model'), date_string)
+		modelcheckpoint_name= "checkpoints/model-{}-{}.hdf5".format(run.get('model'), date_string)
 		# if reproduce_result:
 		# modelcheckpoint_name = "../checkpoints/model-{}.hdf5".format(reproduce_result)
-		modelcheckpoint = ModelCheckpoint(modelcheckpoint_name, monitor = 'val_loss', verbose=1, save_best_only=True, save_weights_only=True)
+		modelcheckpoint = ModelCheckpoint(modelcheckpoint_name, 
+									monitor = 'val_loss', 
+									verbose=1, 
+									save_best_only=True, 
+									save_weights_only=True)
 		
 		# Model early stopping
 		earlystopping = EarlyStopping(monitor='val_loss', patience=10)
@@ -137,10 +164,10 @@ def run_experiment(config, reproduce_result=None):
 
 		model.fit(
 			train_dataset.repeat(), 
-			epochs=epochs, 
-			steps_per_epoch=200,
-			validation_data=val_dataset.repeat(), 
-			validation_steps = 100,
+			epochs=run.get('epochs'), 
+			steps_per_epoch=num_training / batch_size,
+			validation_data=val_dataset, 
+			validation_steps = None,
 			shuffle=True,
 			verbose= 1,
 			callbacks = [LogMetrics(), modelcheckpoint, earlystopping, reduce_lr]

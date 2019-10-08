@@ -27,23 +27,31 @@ import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' 
 
-
 # the config gets converted to dict of values/lists
 # tuples are converted to lists for some reason after the config
 # is fetched from ex (and ex.add(config))
+    
+    
 
-model_params = {'target_size': [257, 257],
-				'channels': ['B2', 'B3', 'B4']}
+fit_params = {'lr': 0.0001,
+			  'epochs': 2,
+			  'reduce_lr_on_plateau': True,
+			  'model': 'convnet'}
+
+data_params = {'batch_size' :1,
+			   'buffer_size':3000,
+			   'use_augment': False,
+			   'stretch_colorpsace': True,
+			   'bridge_separate': True}
+
+model_params = {'channels': ['B4', 'B3', 'B2'],
+				'target_size': [257, 257],
+				'num_classes': 3}
 
 
-config = {'model': 'convnet',
-          'model_params': model_params,
-		  'epochs': 1,
-		  'lr': 0.0001 ,
-		  'batch_size': 32,
-		  'reduce_lr_on_plateau': True}
-           #'only_use_subset':False,
-		   # 'use_augment': False}
+config = {'fit_params': fit_params,
+		  'data_params': data_params,
+		  'model_params': model_params}
 
 run_experiment(config)
 

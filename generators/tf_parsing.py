@@ -8,21 +8,24 @@ Created on Sat Sep 28 01:14:36 2019
 import tensorflow as tf
 import numpy as np
 from scripts.constants import SEED
-
+from generators.augmentations import rotate
 
 # TODO: ADD TARGET SIZE AS A VARIABLE PARAMETER                        DONE
 # TODO: ADD BATCH SIZE                                                 DONE
 # TODO: CONNECTION WITH experiment.py and omniboard                    DONE
 # TODO: fully integrate with sacred/omniboard and experiment.py        DONE
-# TODO: CONFIG OPTION EXTEND TO BRIDGES (switch from 2 to 3 labels)   
-# TODO: REPLACE DEPRECATED NAMES
+# TODO: CONFIG OPTION EXTEND TO BRIDGES (switch from 2 to 3 labels)    DONE
+# TODO: REPLACE DEPRECATED NAMES									   DONE
 
 # TODO: PARAMETERS IN OMNIBOARD: BATCH_SIZE, TARGET_SIZE, lr onplateau DONE
 
 # PREPROCESSING AND AUGMENTATION
-# TODO: AUGMENTATION PIPELINE                                                  
+# TODO: AUGMENTATION PIPELINE                                          DONE              
 # TODO: PREPROCESSING (normalize image to [0,1])                       DONE
 # TODO: NORMALIZATION/STANDARDIZATION FOR NDWI AND ELEVATION
+# TODO: SET VALIDATION AND STEPS PER EPOCHS                            DONE
+# TODO: USE SUBSET OF DATA                                             DONE
+# TODO: BALANCED SAMPLING
 
 
 
@@ -60,7 +63,7 @@ def tf_stretch_image_colorspace(img):
 
 
 #using a closure so we can add extra params to the map function from tf.Dataset
-def parse_image(dims, channels, stretch_colorspace=True):
+def parse_image(target_size, channels, bridge_separate, stretch_colorspace=True, use_augment=False):
     ''' Stack individual RGB bands into a N dimensional array
     The RGB bands are still separate 1D arrays in the TFRecords, combine them into a single 3D array
     
@@ -73,46 +76,118 @@ def parse_image(dims, channels, stretch_colorspace=True):
         #channels = list(features.values())
         label = features['label']
         
-        # get the list of values from the channel names
-        list_chan = [features[x] for x in channels]
+        # Get the image channels, and NDWI/AVE channels separately
+        # we cannot import them all at once since they need separate preprocessing steps
+        img_chan = [features[x] for x in channels if x in ['B4', 'B3', 'B2']]
+        ndwi_chan = [features[x] for x in channels if x in ['NDWI']]
+        ave_chan = [features[x] for x in channels if x in ['AVE']]
+    
         
         # stack the individual arrays, remove all redundant dimensions of size 1, and transpose them into the right order
         # (batch size, H, W, channels)
-        img = tf.transpose(tf.squeeze(tf.stack(list_chan)))
+        img = tf.transpose(tf.squeeze(tf.stack(img_chan)))
         
-        # stretch color spaces
+        # stretch color spaces of the RGB channels
         if stretch_colorspace:
             img = tf_stretch_image_colorspace(img)
         
+        if ndwi_chan:
+            # further normalization?
+            img = tf.concat([img, tf.transpose(ndwi_chan)], axis= 2)
+        
+        if ave_chan:
+            # some kind of normalization needed?
+            img = tf.concat([img, tf.transpose(ave_chan)], axis= 2)
+        
+        if use_augment:
+            # General list of augmentations with condition to also retrieve non-augment image with high prob
+            img = rotate(img)
+        
         # Additionally, resize the images to a desired size
-        img = tf.image.resize(img, dims)
-        return img, tf.reduce_max(tf.one_hot(tf.cast(label, dtype=tf.int32), 2, dtype=tf.int32), axis=0) #tf.cast(label, dtype=tf.int32)# 
+        img = tf.image.resize(img, target_size)
+		
+		# label separator, when bridges need to be class 0, or 2
+
+		
+        if bridge_separate:
+            label = tf.reduce_max(tf.one_hot(tf.cast(label, dtype=tf.int32), 3, dtype=tf.int32), axis=0)
+        else:
+            label = tf.unstack(tf.cast(label, dtype = tf.int32))
+            x = tf.constant(2)
+            def f1(): return tf.add(label, 0)
+            def f2(): return tf.add(label, -2)
+            r = tf.cond(tf.less(label[0], x), f1, f2)
+            label= tf.reduce_max(tf.one_hot(tf.cast(r, dtype=tf.int32), 2, dtype=tf.int32), axis=0)
+        return img, label
     
     return parse_image_fun
 
 # randomization for training sets
-def create_training_dataset(file_names, batch_size, dims, channels):
+def create_training_dataset(file_names, batch_size, bridge_separate, buffer_size, use_augment, stretch_colorspace, **kwargs):
 	''' Create the training dataset from the TFRecords shard
 	'''
-
+	target_size = kwargs.get('target_size')
+	channels = kwargs.get('channels')
+	
 	files = tf.data.Dataset.list_files(file_names, shuffle=None, seed=SEED)
 	shards = files.shuffle(buffer_size=7, seed=SEED)
     
 	dataset = shards.interleave(lambda x: tf.data.TFRecordDataset(x, compression_type='GZIP'), 
                                 cycle_length=len(file_names), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-	dataset = dataset.shuffle(buffer_size=3000, seed = SEED)
+	dataset = dataset.shuffle(buffer_size=buffer_size, seed = SEED)
     #dataset = dataset.repeat(4)
 	dataset = dataset.map(parse_serialized_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-	dataset = dataset.map(parse_image(dims=dims, channels = channels), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+	dataset = dataset.map(parse_image(target_size=target_size, 
+								   channels = channels, 
+								   bridge_separate=bridge_separate,
+                                   stretch_colorspace=stretch_colorspace, 
+                                   use_augment=use_augment), 
+                                   num_parallel_calls=tf.data.experimental.AUTOTUNE)	
 	dataset = dataset.batch(batch_size)
+	dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 	return dataset
 
 
 # Parsing TF fun for validation and testing
-def validate(file_names, batch_size, dims, channels):
+def validate(file_names, batch_size, bridge_separate, stretch_colorspace, **kwargs):
+    target_size = kwargs.get('target_size')
+    channels = kwargs.get('channels')
+    stretch_colorspace = kwargs.get('stretch_colorspace', True)
+
     files = tf.data.Dataset.list_files(file_names, shuffle=None, seed=SEED)
     dataset = tf.data.TFRecordDataset(files, compression_type='GZIP')
     dataset = dataset.map(parse_serialized_example, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.map(parse_image(dims=dims, channels = channels), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.map(parse_image(target_size=target_size, 
+									  channels=channels, 
+									  bridge_separate=bridge_separate,
+									  stretch_colorspace=stretch_colorspace, use_augment=False), 
+                          num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.batch(batch_size)
+    dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
     return dataset
+
+
+def num_files(x):
+	''''''
+# label record iterator
+	def parse_label(features):
+	    labels = features['label']
+	    y,_, counts = tf.unique_with_counts(labels)
+	    return counts
+	
+	def count_labels(parser):
+		cnt = parser.reduce(np.int64(0), lambda x, _: x + 1)
+		print("total count is {}".format(cnt))
+
+
+	data = tf.data.TFRecordDataset(x, compression_type='GZIP')
+	data = data.map(parse_serialized_example, num_parallel_calls = tf.data.experimental.AUTOTUNE)
+	labels = data.map(parse_label, num_parallel_calls = tf.data.experimental.AUTOTUNE)
+	counts = count_labels(labels)
+	print(" total number of {} found in the dataset".format(counts))
+	return counts
+	
+	
+	
+	
+	
