@@ -7,4 +7,4 @@ Welcome to my blog on dam detection using neural networks. This projects primari
 
 
 ## Working with Earth Engine
-**1 august 2019**   
+*1 august 2019*  
