@@ -88,7 +88,7 @@ def run_experiment(config, reproduce_result=None):
 		data_params = config.get('data_params')
 		batch_size = data_params.get('batch_size')
 		stretch_colorspace = data_params.get('stretch_colorspace')
-		use_augment = data_params.get('use_augment')
+		augmentations = data_params.get('augmentations')
 		bridge_separate = data_params.get('bridge_separate')
 		buffer_size = data_params.get('buffer_size')
 
@@ -118,7 +118,7 @@ def run_experiment(config, reproduce_result=None):
 		print("[!] Creating dataset iterators \n")
 		# Load the dataset iterators
 		train_dataset = create_training_dataset(x_train, batch_size, bridge_separate,
-                                          buffer_size, use_augment, stretch_colorspace,
+                                          buffer_size, stretch_colorspace, augmentations,
                                           **model_params)
 		val_dataset = validate(x_val, batch_size, bridge_separate, stretch_colorspace, **model_params)
 		test_dataset = validate(x_test, batch_size, bridge_separate, stretch_colorspace, **model_params)

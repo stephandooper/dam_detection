@@ -8,7 +8,6 @@ Created on Sat Sep 28 01:14:36 2019
 import tensorflow as tf
 import numpy as np
 from scripts.constants import SEED
-from generators.augmentations import rotate
 
 # TODO: ADD TARGET SIZE AS A VARIABLE PARAMETER                        DONE
 # TODO: ADD BATCH SIZE                                                 DONE
@@ -63,7 +62,7 @@ def tf_stretch_image_colorspace(img):
 
 
 #using a closure so we can add extra params to the map function from tf.Dataset
-def parse_image(target_size, channels, bridge_separate, stretch_colorspace=True, use_augment=False):
+def parse_image(target_size, channels, bridge_separate, stretch_colorspace=True):
     ''' Stack individual RGB bands into a N dimensional array
     The RGB bands are still separate 1D arrays in the TFRecords, combine them into a single 3D array
     
@@ -91,24 +90,20 @@ def parse_image(target_size, channels, bridge_separate, stretch_colorspace=True,
         if stretch_colorspace:
             img = tf_stretch_image_colorspace(img)
         
+        # concatenate ndwi channel
         if ndwi_chan:
             # further normalization?
             img = tf.concat([img, tf.transpose(ndwi_chan)], axis= 2)
         
+		#concatenate ave channel
         if ave_chan:
             # some kind of normalization needed?
             img = tf.concat([img, tf.transpose(ave_chan)], axis= 2)
-        
-        if use_augment:
-            # General list of augmentations with condition to also retrieve non-augment image with high prob
-            img = rotate(img)
         
         # Additionally, resize the images to a desired size
         img = tf.image.resize(img, target_size)
 		
 		# label separator, when bridges need to be class 0, or 2
-
-		
         if bridge_separate:
             label = tf.reduce_max(tf.one_hot(tf.cast(label, dtype=tf.int32), 3, dtype=tf.int32), axis=0)
         else:
@@ -123,7 +118,7 @@ def parse_image(target_size, channels, bridge_separate, stretch_colorspace=True,
     return parse_image_fun
 
 # randomization for training sets
-def create_training_dataset(file_names, batch_size, bridge_separate, buffer_size, use_augment, stretch_colorspace, **kwargs):
+def create_training_dataset(file_names, batch_size, bridge_separate, buffer_size, stretch_colorspace, augmentations=[], **kwargs):
 	''' Create the training dataset from the TFRecords shard
 	'''
 	target_size = kwargs.get('target_size')
@@ -140,9 +135,11 @@ def create_training_dataset(file_names, batch_size, bridge_separate, buffer_size
 	dataset = dataset.map(parse_image(target_size=target_size, 
 								   channels = channels, 
 								   bridge_separate=bridge_separate,
-                                   stretch_colorspace=stretch_colorspace, 
-                                   use_augment=use_augment), 
+                                   stretch_colorspace=stretch_colorspace), 
                                    num_parallel_calls=tf.data.experimental.AUTOTUNE)	
+	for f in augmentations:
+		dataset = dataset.map(lambda x,y: tf.cond(tf.random_uniform([], 0, 1) > 0.75, lambda: (f(x),y), lambda: (x, y)), num_parallel_calls=4)
+
 	dataset = dataset.batch(batch_size)
 	dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 	return dataset
@@ -160,7 +157,7 @@ def validate(file_names, batch_size, bridge_separate, stretch_colorspace, **kwar
     dataset = dataset.map(parse_image(target_size=target_size, 
 									  channels=channels, 
 									  bridge_separate=bridge_separate,
-									  stretch_colorspace=stretch_colorspace, use_augment=False), 
+									  stretch_colorspace=stretch_colorspace), 
                           num_parallel_calls=tf.data.experimental.AUTOTUNE)
     dataset = dataset.batch(batch_size)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)

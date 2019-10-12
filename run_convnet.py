@@ -11,6 +11,7 @@ from scripts.experiment import run_experiment
 #import tensorflow as tf
 from tensorflow.keras.backend import clear_session
 import os
+from generators.augmentations import rotate, flip
 # The reproducibility problem is in the GPU!!
 #os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 #os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -31,8 +32,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 # tuples are converted to lists for some reason after the config
 # is fetched from ex (and ex.add(config))
     
-    
-
 fit_params = {'lr': 0.0001,
 			  'epochs': 2,
 			  'reduce_lr_on_plateau': True,
@@ -40,7 +39,7 @@ fit_params = {'lr': 0.0001,
 
 data_params = {'batch_size' :1,
 			   'buffer_size':3000,
-			   'use_augment': False,
+			   'augmentations': [flip, rotate],
 			   'stretch_colorpsace': True,
 			   'bridge_separate': True}
 

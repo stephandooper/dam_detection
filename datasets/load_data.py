@@ -51,9 +51,7 @@ def load_data(bridge_separate):
 	print("other   |            {}".format(len(other)))
 	print("-------------------------------------")
 	print("TOTAL   |            {} \n".format(len(dams) + len(bridges) + len(other)))
-	
-	print("WARNING: BRIDGES ARE NOT USED YET!!!!!!")
-	
+		
 	
 	print("Train, validation, and test split distribution: \n")
 	
