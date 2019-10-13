@@ -9,9 +9,11 @@ import errno
 
 from google_drive_downloader import GoogleDriveDownloader as gdd
 
-files = {'dams': '1TEgPtclbIaxpSIuva22MvdzTlD6y9BJm', 
-         'bridges': '1ksH6WZkWOSoh4rZhRT1DAsg7LfWp61ZL',
-         'other': '10lFX8Gr6T6eG_kZ6CVcGBZ_nkE1B5sQd'}
+files = {'grand': '103pWVUcMhaP0a0ZtwU8CcwKdphf7gYwa', 
+         'grand_test':'1y5jkKOgYNwO4t4FWBLdNxdFgynaxtEgD',
+         'good':'1jYDmzRS3DbAWvyrrOUPOk6abt55YiRGg',
+         'bridges': '1NIkriHjWeeiyEPcKt6o-9oTe8w-lq70A',
+         'other': '1XOFrrgGMpBSiRm8vQgiKy4NhWFwhWQ0N'}
 
 def download_file(file_id, dest_path, *args, **kwargs):
     if os.path.exists(dest_path):
@@ -25,7 +27,7 @@ def download_file(file_id, dest_path, *args, **kwargs):
 
 
 for file in files.items():
-    dest_path = '../data/raw/' + str(file[0]) +'.gz'    
+    dest_path = '../datasets/raw/' + str(file[0]) +'.gz'    
     try:
         download_file(file[1], dest_path)
         print("downloading {}  into {} with link {}".format(file[0], dest_path, file[1]))
