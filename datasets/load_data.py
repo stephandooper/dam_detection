@@ -19,20 +19,23 @@ def load_data(bridge_separate):
 	
 	data_path = dirname(abspath(__file__))
 	print(" EXTRACTING DATA FROM: {} \n".format(data_path))
-	dams = glob(join(data_path, 'data/dams*.gz'))
+	grand = glob(join(data_path, 'data/grand*.gz'))
+	good = glob(join(data_path, 'data/good*.gz'))
 	bridges = glob(join(data_path, 'data/bridges*.gz'))
 	other = glob(join(data_path, 'data/other*.gz'))
 	
 	# create artificial dummy labels for train/validation/test splits later on
-	dams = [[x, 1] for x in dams]
+	grand = [[x, 1] for x in grand]
+	good = [[x, 1] for x in good]	
 	other = [[x, 0] for x in other]
+
 	
 	if bridge_separate:
 		bridges = [[x, 2] for x in bridges]
 	else:
 		bridges = [[x, 0] for x in bridges]
 
-	records = [[data, label] for sublist in [dams, other, bridges] for [data, label] in sublist]
+	records = [[data, label] for sublist in [grand, other, bridges, good] for [data, label] in sublist]
 	labels = [label for data, label in records]
 	records = [data for data, label in records]
 
@@ -47,10 +50,11 @@ def load_data(bridge_separate):
 	print("DATA    |  NUMBER OF TFRECORDS             ")
 	print("-------------------------------------")
 	print("bridges |            {}".format(len(bridges)))
-	print("dams    |            {}".format(len(dams)))
+	print("grand    |           {}".format(len(grand)))
+	print("good   |             {}".format(len(good)))
 	print("other   |            {}".format(len(other)))
 	print("-------------------------------------")
-	print("TOTAL   |            {} \n".format(len(dams) + len(bridges) + len(other)))
+	print("TOTAL   |            {} \n".format(len(grand) + len(bridges) + len(other) + len(good)))
 		
 	
 	print("Train, validation, and test split distribution: \n")

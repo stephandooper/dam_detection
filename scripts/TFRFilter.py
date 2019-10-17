@@ -13,7 +13,7 @@ import random
 import os
 import gc
 from constants import SEED, NUM_FILES_PER_RECORD
-import glob, os, os.path
+import glob, os.path
 
 random.seed(SEED)
 
@@ -258,7 +258,7 @@ class TFRecordGenerator:
         print("starting multiprocessing threads")
         file_incr = 1
         record_incr = 0
-        with Pool(10) as p:  
+        with Pool(2) as p:  
             for result in p.map(wrapped_feature, parser):
                 
                 if record_incr == num_samples:
@@ -282,9 +282,9 @@ class TFRecordGenerator:
     
 if __name__ == '__main__':
 
-    data_files = ['dams.gz', 'other.gz', 'bridges.gz']
-    data_path = os.path.join('..', 'data', 'raw')
-    out_path = os.path.join('..', 'data', 'samples')
+    data_files = ['grand', 'good.gz', 'grand_test.gz', 'other.gz', 'bridges.gz']
+    data_path = os.path.join('..', 'datasets', 'raw')
+    out_path = os.path.join('..', 'datasets', 'data')
     
     infiles = list(map(lambda x: os.path.join(data_path, x), data_files))
     outfiles = list(map(lambda x: os.path.join(out_path, x.split('.')[0]), data_files))
@@ -296,14 +296,14 @@ if __name__ == '__main__':
             print("Answer was yes")
 
             filelist = glob.glob(os.path.join(out_path, "*.gz"))
-            for f in filelist:
-                os.remove(f)
+            #for f in filelist:
+            #    os.remove(f)
 
             for infile, outfile in zip(infiles, outfiles):
                 # load dataset
                 print("loading dataset located in {}".format(infile))
                 dataset = load_dataset(infile, compression='GZIP')
-                TFRecordGenerator.generate_records_per_batch_mp(dataset, NUM_FILES_PER_RECORD, outfile)
+                TFRecordGenerator.generate_records_per_batch(dataset, NUM_FILES_PER_RECORD, outfile)
                 gc.collect()
 
                 #t = TFRecordGenerator(num_shards =7)

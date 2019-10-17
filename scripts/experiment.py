@@ -15,9 +15,13 @@ from scripts.login import MONGO_URI
 from scripts.constants import SEED
 import datetime
 from models.convnet import build_convnet
+from models.fcn import build_fcn
+from models.densenet import build_densenet121
 from datasets.load_data import load_data
+import tensorflow.keras.backend as K
 from generators.tf_parsing import create_training_dataset, validate, num_files
 from pprint import pprint
+import numpy as np
 
 # TODO: add target size as a variable parameters both in the generators as well as the models
 # TODO: PUT IN ITS OWN GENERATORS FOLDER
@@ -36,7 +40,9 @@ from pprint import pprint
 
 
 model_dict = {
-	'convnet': build_convnet
+	'convnet': build_convnet,
+	'fcn': build_fcn,
+	'densenet121': build_densenet121
 }
 
 
@@ -178,14 +184,24 @@ def run_experiment(config, reproduce_result=None):
         # load optimal weights
 		
 		model.load_weights(modelcheckpoint_name)
+		
 		# evaluate works like a charm
 		results = model.evaluate(test_dataset)
 		print("results are", results)	
+		
+		print("[!] predicting confusion matrix")
+		preds = model.predict(test_dataset)
+		
+		labels = [label for img,label in test_dataset]
+		labels = [np.argmax(item.numpy()) for sublist in labels for item in sublist]
+		labels = np.array(labels)
+		
+		confusion_matrix = tf.math.confusion_matrix(labels, np.argmax(preds, axis=1))
+		print(confusion_matrix)
 		
 		_run.log_scalar("test_loss", float(results[0]))
 		_run.log_scalar("test_acc", float(results[1]))
 		
 	runner = ex.run()
-	
 	return runner     
 

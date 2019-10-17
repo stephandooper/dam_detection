@@ -97,7 +97,8 @@ def parse_image(target_size, channels, bridge_separate, stretch_colorspace=True)
         
 		#concatenate ave channel
         if ave_chan:
-            # some kind of normalization needed?
+            # nornalization: https://developers.google.com/earth-engine/datasets/catalog/JAXA_ALOS_AW3D30_V1_1
+            ave_chan = tf.divide(tf.add(ave_chan, 479) ,479 + 8859)
             img = tf.concat([img, tf.transpose(ave_chan)], axis= 2)
         
         # Additionally, resize the images to a desired size
