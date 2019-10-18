@@ -19,10 +19,10 @@ def load_data(bridge_separate):
 	
 	data_path = dirname(abspath(__file__))
 	print(" EXTRACTING DATA FROM: {} \n".format(data_path))
-	grand = glob(join(data_path, 'data/grand*.gz'))
-	good = glob(join(data_path, 'data/good*.gz'))
-	bridges = glob(join(data_path, 'data/bridges*.gz'))
-	other = glob(join(data_path, 'data/other*.gz'))
+	grand = glob(join(data_path, 'data/grand*.gz'))[0:30]
+	good = glob(join(data_path, 'data/good*.gz'))[0:30]
+	bridges = glob(join(data_path, 'data/bridges*.gz'))[0:30]
+	other = glob(join(data_path, 'data/other*.gz'))[0:30]
 	
 	# create artificial dummy labels for train/validation/test splits later on
 	grand = [[x, 1] for x in grand]

@@ -33,17 +33,17 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 # is fetched from ex (and ex.add(config))
     
 fit_params = {'lr': 0.0001,
-			  'epochs': 10,
+			  'epochs': 5,
 			  'reduce_lr_on_plateau': True,
 			  'model': 'fcn'}
 
 data_params = {'batch_size' :32,
 			   'buffer_size':3000,
-			   'augmentations': [flip, rotate],
+			   'augmentations': [],
 			   'stretch_colorpsace': True,
 			   'bridge_separate': False}
 
-model_params = {'channels': ['B4', 'B3', 'B2', 'NDWI'],
+model_params = {'channels': ['B4', 'B3', 'B2'],
 				'target_size': [128, 128],
 				'num_classes': 2}
 

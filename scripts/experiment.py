@@ -22,7 +22,8 @@ import tensorflow.keras.backend as K
 from generators.tf_parsing import create_training_dataset, validate, num_files
 from pprint import pprint
 import numpy as np
-
+from tfdeterminism import patch
+patch()
 # TODO: add target size as a variable parameters both in the generators as well as the models
 # TODO: PUT IN ITS OWN GENERATORS FOLDER
 # TODO: BATCH SIZE, VARIABLE TARGET SIZE
@@ -38,6 +39,9 @@ import numpy as np
 # TODO: ADD SET_SEED IN GENERATORS WHEREVER POSSIBLE
 # TODO: BALANCED SAMPLING
 
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.222)
+
+sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 
 model_dict = {
 	'convnet': build_convnet,
