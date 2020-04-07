@@ -9,7 +9,7 @@ Main file to declare and run the models through the experiment.py file
 """
 #import tensorflow as tf
 
-from scripts.experiment import run_experiment
+from experiment import run_experiment
 import argparse
 
 

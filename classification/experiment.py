@@ -3,24 +3,32 @@
 Created on Sat Sep 21 18:49:05 2019
 
 @author: Stephan
+
+main experiment workflow
+The workflow runs through a sacred omniboard instance
+which helps track and reproduce experiments among different runs
+
+To make this file work, you need to have a running sacred and omniboard instance
+and a login.py file with the following (mongodb url structure):
+ 
+mongodb+srv://my-username:my-password@my-cluster-v9zjk.mongodb.net/sacred?retryWrites=true
+more information can be found on mongoDB, the omniboard github, and sacred docs
 """
+
 import tensorflow as tf
 tf.compat.v1.enable_eager_execution()
 from tensorflow.keras.callbacks import Callback, ReduceLROnPlateau, ModelCheckpoint, EarlyStopping
 import pymongo
 from sacred import Experiment
 from sacred.observers import MongoObserver
-from scripts.login import MONGO_URI
-from scripts.constants import SEED
+from login import MONGO_URI
+from constants import SEED
 import datetime
-from models.convnet import build_convnet
-from models.fcn import build_fcn
 from models.densenet import build_densenet121
 from models.darknet19 import darknet19_detection
 from models.resnet import build_resnet50
-from models.dilated_fcn import build_dilated_fcn_61
-from datasets.load_data import load_data
-from generators.tf_parsing import create_training_dataset, validate
+from load_data import load_data
+from tf_parsing import create_training_dataset, validate
 from pprint import pprint
 import numpy as np
 import pandas as pd
@@ -30,31 +38,43 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score, precision_score, recall_score
 import seaborn as sns
 import io
-import tensorflow.contrib.summary as tfsum
+import tensorflow.summary as tfsum
 
-from tfdeterminism import patch
-#patch()
 
-'''
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth=True
 tf.compat.v1.Session(config=config)
-'''
 
+'''
 config = tf.ConfigProto()
 config.gpu_options.allow_growth=True
 sess = tf.Session(config=config)
+'''
 
+# possible models which are imported from the model files
+# new models can be added here
 model_dict = {
-	'convnet': build_convnet,
-	'fcn': build_fcn,
-	'dilated_fcn': build_dilated_fcn_61,
 	'densenet121': build_densenet121,
 	'resnet50': build_resnet50,
     'darknet19': darknet19_detection
 }
 
 def create_label_csv(dataset, fname):
+    ''' create label distribution in a csv file
+    TFRecords cannot keep track of the labels, but has to count and process
+    individual examples
+    
+    Parameters
+    ----------
+    dataset : TFRecorddataset adapter instance
+    fname : string
+        filename to be given to the csv
+
+    Returns
+    -------
+    writes a csv file to the directory in which the file is run
+
+    '''
     print("creating label list for dataset set")
     start_time = datetime.datetime.now()
     print("start time: {}".format(start_time))
@@ -137,16 +157,11 @@ class Metrics(Callback):
             tf.compat.v2.summary.image("Confusion Matrix", image, step=epoch)
 
 
-
+# track memory usage and issues in keras/tensorflow
 import resource
 class MemoryCallback(Callback):
     def on_epoch_end(self, epoch, log={}):
         print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-
-
-def count_files():
-	''' Counts the number of files in total in the dataset'''
-	pass
 
 
 def run_experiment(config, reproduce_result=None):
@@ -223,23 +238,23 @@ def run_experiment(config, reproduce_result=None):
 		# parse through them once, and create a csv file with a list of all the labels
 		# note: the tf parsing requires that there is no randomness (shuffling) in the validation/test labels
 
-		if not os.path.exists('datasets/data/valid/val_labels.csv'):
-			print(os.path.exists('datasets/data/valid/val_labels.csv'))
-			print("[!] creating validation label file in datasets/data/valid/val_labels.csv")
-			create_label_csv(val_dataset,'datasets/data/valid/val_labels.csv')
+		if not os.path.exists('../datasets/data/valid/val_labels.csv'):
+			print(os.path.exists('../datasets/data/valid/val_labels.csv'))
+			print("[!] creating validation label file in ../datasets/data/valid/val_labels.csv")
+			create_label_csv(val_dataset,'../datasets/data/valid/val_labels.csv')
 		else:
 			print("[!] validation labels csv exist")
 			
-		if not os.path.exists('datasets/data/test/test_labels.csv'):
-			print("[!] creating test label file in datasets/data/test/test_labels.csv")
-			create_label_csv(test_dataset,'datasets/data/test/test_labels.csv')
+		if not os.path.exists('../datasets/data/test/test_labels.csv'):
+			print("[!] creating test label file in ../datasets/data/test/test_labels.csv")
+			create_label_csv(test_dataset,'../datasets/data/test/test_labels.csv')
 		else:
 			print("[!] test labels csv exist")
 
 		# load the file with validation labels
 		# getting labels from a TFRecords with lots of other data is horribly slow...
 		print("[!] Loading validation labels for callbacks")
-		val_labels = pd.read_csv('datasets/data/valid/val_labels.csv')
+		val_labels = pd.read_csv('../datasets/data/valid/val_labels.csv')
 		val_labels = np.squeeze(val_labels.to_numpy())
 		
 		# Model definitions --------------------------------------------------------
@@ -313,6 +328,7 @@ def run_experiment(config, reproduce_result=None):
 
 		print("[!] done running, terminating program")
 		'''
+        optional: run test set evaluation within sacred/omniboard workflow
 		# Model evaluation
 		print("[!] predicting test set")
         # load optimal weights
@@ -340,11 +356,3 @@ def run_experiment(config, reproduce_result=None):
 
 	runner = ex.run()
 	return runner     
-
-
-'''
-	x = [0, 0, 0]
-	for img,label in train_dataset:
-	    x += label
-	print(x)
-'''

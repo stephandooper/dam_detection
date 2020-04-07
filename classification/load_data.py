@@ -31,7 +31,8 @@ def load_data():
         class probabilities
     '''
 
-    data_path = dirname(abspath(__file__))
+    #data_path = dirname(abspath(__file__))
+    data_path = '/vol/tensusers2/sdooper/dam_detection/datasets/'
     print(" EXTRACTING DATA FROM: {} \n".format(data_path))
     train = glob(join(data_path, 'data/train/*.gz'))
     valid = glob(join(data_path, 'data/valid/*.gz'))

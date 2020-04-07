@@ -17,10 +17,11 @@ parsing functions
 
 import tensorflow as tf
 import numpy as np
-from scripts.constants import SEED
+# this solves a numpy rng error
+np.random.bit_generator = np.random._bit_generator
+from constants import SEED
 import os
 #os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
-from scripts.constants import SEED
 from imgaug import augmenters as iaa
 import imgaug as ia
 ia.seed(SEED)
@@ -28,6 +29,8 @@ ia.seed(SEED)
 # bridges are not incorporated yet
 NUM_CLASSES = 2
 # TF parsing functions
+
+
 
 
 def apply_augmentation(img):
@@ -260,7 +263,7 @@ def undersampling_filter(probs, class_target_prob, undersampling_coef = 0.9):
         prob_ratio = prob_ratio ** undersampling_coef
         prob_ratio = tf.minimum(prob_ratio, 1.0)
 
-        acceptance = tf.less_equal(tf.random_uniform([], dtype=tf.float32, seed=SEED), prob_ratio)
+        acceptance = tf.less_equal(tf.random.uniform([], dtype=tf.float32, seed=SEED), prob_ratio)
         # predicate must return a scalar boolean tensor
         return acceptance
 
@@ -323,7 +326,7 @@ def oversampling_filter(probs, class_target_prob, oversampling_coef =0.9):
         # of change that we should return 2 instead of 1
         repeat_residual = prob_ratio - repeat_count # a number between 0-1
         residual_acceptance = tf.less_equal(
-                            tf.random_uniform([], dtype=tf.float32, seed=SEED), repeat_residual
+                            tf.random.uniform([], dtype=tf.float32, seed=SEED), repeat_residual
         )
 
         residual_acceptance = tf.cast(residual_acceptance, tf.int64)
@@ -397,10 +400,16 @@ def create_training_dataset(file_names, batch_size, buffer_size, augmentations,
 								   channels = channels), 
                                    num_parallel_calls=tf.data.experimental.AUTOTUNE)	
     
+    def set_shape(x,y, shape=[target_size[0], target_size[1], len(channels)]):
+        x.set_shape([shape[0],shape[1],shape[2]])
+        return x, y
+    
+
     # AUGMENTATIONS: return (f(x), y)
     if augmentations:
         print("runtime initialized with augmentations")
         dataset = dataset.map(lambda x,y: (tf.numpy_function(apply_augmentation, [x], tf.float32),y))
+        dataset = dataset.map(lambda x,y: set_shape(x,y))
     else:
         print("runtime initialized without augmentations")
 

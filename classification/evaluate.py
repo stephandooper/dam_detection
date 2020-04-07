@@ -4,6 +4,8 @@
 Created on Tue Jan  7 12:30:50 2020
 
 @author: stephan
+
+Evaluates the test set without using the SACRED/omniboard workflow
 """
 
 import tensorflow as tf
