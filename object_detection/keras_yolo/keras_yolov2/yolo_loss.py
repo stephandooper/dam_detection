@@ -69,10 +69,10 @@ class YoloLoss(object):
 
     @staticmethod
     def _generate_yolo_grid(batch_size, grid_size, nb_box):
-        cell_x = tf.to_float(tf.reshape(tf.tile(tf.range(grid_size[0]), [grid_size[1]]), (1, grid_size[1], grid_size[0],
-                                                                                          1, 1)))
-        cell_y = tf.to_float(tf.reshape(tf.tile(tf.range(grid_size[1]), [grid_size[0]]), (1, grid_size[0], grid_size[1],
-                                                                                          1, 1)))
+        cell_x = tf.cast(tf.reshape(tf.tile(tf.range(grid_size[0]), [grid_size[1]]), (1, grid_size[1], grid_size[0],
+                                                                                          1, 1)), dtype=tf.float32)
+        cell_y = tf.cast(tf.reshape(tf.tile(tf.range(grid_size[1]), [grid_size[0]]), (1, grid_size[0], grid_size[1],
+                                                                                          1, 1)),dtype=tf.float32)
         cell_y = tf.transpose(cell_y, (0, 2, 1, 3, 4))
  
         cell_grid = tf.tile(tf.concat([cell_x, cell_y], -1), [batch_size, 1, 1, nb_box, 1])
@@ -91,43 +91,38 @@ class YoloLoss(object):
         b_xy_pred = y_pred[..., :2]
         b_wh_pred = y_pred[..., 2:4]
         
-        b_xy = y_true[..., 0:2]
-        b_wh = y_true[..., 2:4]
+        b_xy_true = y_true[..., 0:2]
+        b_wh_true = y_true[..., 2:4]
 
-        indicator_coord = K.expand_dims(y_true[..., 4], axis=-1) * self.lambda_coord
+        indicator_coord = K.expand_dims(y_true[..., 4], axis=-1)
 
-        loss_xy = K.sum(K.square(b_xy - b_xy_pred) * indicator_coord)
-        loss_wh = K.sum(K.square(b_wh - b_wh_pred) * indicator_coord)
-        # loss_wh = K.sum(K.square(K.sqrt(b_wh) - K.sqrt(b_wh_pred)) * indicator_coord)#, axis=[1,2,3,4])
+        loss_xy = K.sum(K.square(b_xy_true - b_xy_pred) * indicator_coord) * self.lambda_coord
+        loss_wh = K.sum(K.square(K.sqrt(b_wh_true) - K.sqrt(b_wh_pred)) * indicator_coord) * self.lambda_coord
 
-        return (loss_wh + loss_xy) / 2
+        return loss_wh + loss_xy
 
     def obj_loss(self, y_true, y_pred):
-
-        b_o = calculate_ious(y_true, y_pred, use_iou=self.readjust_obj_score)
-        b_o_pred = y_pred[..., 4]
+        # TODO: should make a review in this part
+        obj_conf_true = y_true[..., 4]
+        obj_conf_pred = y_pred[..., 4]
 
         num_true_labels = self.grid_size[0] * self.grid_size[1] * self.nb_anchors
-        y_true_p = K.reshape(y_true[..., :4], shape=(self.batch_size, 1, 1, 1, num_true_labels, 4))
-        iou_scores_buff = calculate_ious(y_true_p, K.expand_dims(y_pred, axis=4))
+        y_true_coords = K.reshape(y_true[..., :4], shape=(self.batch_size, 1, 1, 1, num_true_labels, 4))
+        iou_scores_buff = calculate_ious(y_true_coords, K.expand_dims(y_pred, axis=4))
         best_ious = K.max(iou_scores_buff, axis=4)
 
         indicator_noobj = K.cast(best_ious < self.iou_filter, np.float32) * (1 - y_true[..., 4]) * self.lambda_noobj
         indicator_obj = y_true[..., 4] * self.lambda_obj
-        indicator_o = indicator_obj + indicator_noobj
+        indicator_obj_noobj = indicator_obj + indicator_noobj
 
-        loss_obj = K.sum(K.square(b_o-b_o_pred) * indicator_o)
-        return loss_obj / 2
+        loss_obj = K.sum(K.square(obj_conf_true-obj_conf_pred) * indicator_obj_noobj)
+        return loss_obj
 
     def class_loss(self, y_true, y_pred):
-
+        # TODO: should we use focal loss?
         p_c_pred = K.softmax(y_pred[..., 5:])
-        p_c = K.one_hot(K.argmax(y_true[..., 5:], axis=-1), 1)
-        loss_class_arg = K.sum(K.square(p_c - p_c_pred), axis=-1)
-        
-        # b_class = K.argmax(y_true[..., 5:], axis=-1)
-        # b_class_pred = y_pred[..., 5:]
-        # loss_class_arg = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=b_class, logits=b_class_pred)
+        p_c_true = K.one_hot(K.argmax(y_true[..., 5:], axis=-1), 1)
+        loss_class_arg = K.sum(K.square(p_c_true - p_c_pred), axis=-1)
 
         indicator_class = y_true[..., 4] * self.lambda_class
 
@@ -153,6 +148,5 @@ class YoloLoss(object):
         total_class_loss = self.class_loss(y_true, y_pred)
 
         loss = total_coord_loss + total_obj_loss + total_class_loss
-		
-		
+
         return loss

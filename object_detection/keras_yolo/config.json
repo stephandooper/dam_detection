@@ -1,6 +1,6 @@
 {
     "model" : {
-        "backend":              "./keras_yolov2/custom_backend.FullYoloCustomFeature",
+        "backend":              "./keras_yolov2/custom_backend.DenseNet121CustomFeature",
         "input_size_w":         257,
         "input_size_h":         257,
 		"input_size_c":			5,

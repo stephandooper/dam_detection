@@ -1,5 +1,4 @@
 import tensorflow as tf
-tf.enable_eager_execution()
 from .yolo_loss import YoloLoss
 from .map_evaluation import MapEvaluation
 from .utils import decode_netout, import_feature_extractor, import_dynamically
@@ -8,7 +7,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Reshape, Conv2D, Input
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau, LearningRateScheduler
-import tensorflow.contrib.summary as tfsum
+import tensorflow.summary as tfsum
 import numpy as np
 import sys
 import cv2
@@ -42,8 +41,8 @@ class LearningRateScheduler2(tf.keras.callbacks.Callback):
         tf.keras.backend.set_value(self.model.optimizer.lr, scheduled_lr)
         
         print('\nEpoch %05d: Learning rate is %6.6f.' % (epoch, scheduled_lr))
-        with self.file_writer.as_default(), tf.contrib.summary.always_record_summaries():
-            tf.contrib.summary.scalar('learning_rate', scheduled_lr, step=epoch)
+        with self.file_writer.as_default():
+            tf.summary.scalar('learning_rate', scheduled_lr, step=epoch)
 
 def schedule(epoch, lr, start_lr):   
     if epoch <10:
@@ -276,7 +275,7 @@ class YOLO(object):
         #############################
         # Start the training process
         #############################        
-        
+
         self._model.fit(x=train_generator(mode='train').repeat(), 
                         validation_data = valid_generator(mode='valid'),
                         validation_steps =int(np.ceil((len(valid_imgs) * 100) / batch_size)),

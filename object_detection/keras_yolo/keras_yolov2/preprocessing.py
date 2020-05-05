@@ -293,7 +293,9 @@ class BatchGenerator(object):
         # not actually a batch, just a single image
         x_batch, y_batch = tf.numpy_function(self.get_batch,
                                             [img, obj, self._config['ANCHORS'], class_name, True],
-                                            [tf.float32, tf.float32])     
+                                            [tf.float32, tf.float32])
+        x_batch.set_shape([self._config['IMAGE_W'],self._config['IMAGE_H'], self._config['IMAGE_C']])                          
+        y_batch.set_shape([self._config['GRID_H'],self._config['GRID_W'],self._config['BOX'], len(self._config['LABELS']) + 4 + 1])
         
         return x_batch, y_batch
 
@@ -345,6 +347,9 @@ class BatchGenerator(object):
         x_batch, y_batch = tf.numpy_function(self.get_batch,
                                             [img, all_obj, self._config['ANCHORS'], class_name, False],
                                             [tf.float32, tf.float32]) 
+        x_batch.set_shape([self._config['IMAGE_W'],self._config['IMAGE_H'], self._config['IMAGE_C']])                          
+        y_batch.set_shape([self._config['GRID_H'],self._config['GRID_W'],self._config['BOX'], len(self._config['LABELS']) + 4 + 1])
+
         
         return x_batch, all_obj, class_name
     

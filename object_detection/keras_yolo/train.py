@@ -5,12 +5,13 @@ from keras_yolov2.preprocessing import parse_annotation_xml, parse_annotation_cs
 from keras_yolov2.utils import get_session, create_backup
 from keras_yolov2.frontend import YOLO
 import numpy as np
+np.random.bit_generator = np.random._bit_generator
+
 import argparse
 import tensorflow.keras
 import json
 import os
-from tfdeterminism import patch
-patch()
+
 
 argparser = argparse.ArgumentParser(
     description='Train and validate YOLO_v2 model on any dataset')
@@ -32,6 +33,7 @@ def _main_(args):
 
     if config['backup']['create_backup']:
         config = create_backup(config)
+        
     ###############################
     #   Parse the annotations 
     ###############################

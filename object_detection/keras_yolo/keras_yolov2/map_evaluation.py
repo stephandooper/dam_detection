@@ -68,11 +68,11 @@ class MapEvaluation(tensorflow.keras.callbacks.Callback):
                 print("mAP did not improve from {}.".format(self.bestMap))
 
 
-            with self._file_writer.as_default(), tf.contrib.summary.always_record_summaries():
-                tf.contrib.summary.scalar('val_mAP', _map, step=epoch)
-                tf.contrib.summary.scalar('val_precision', precision, step=epoch)
-                tf.contrib.summary.scalar('val_recall', recall, step=epoch)
-                tf.contrib.summary.scalar('val_f1', f1, step=epoch)
+            with self._file_writer.as_default():
+                tf.summary.scalar('val_mAP', _map, step=epoch)
+                tf.summary.scalar('val_precision', precision, step=epoch)
+                tf.summary.scalar('val_recall', recall, step=epoch)
+                tf.summary.scalar('val_f1', f1, step=epoch)
 
 
     def evaluate_map(self):
