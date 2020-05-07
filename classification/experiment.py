@@ -150,11 +150,11 @@ class Metrics(Callback):
 
         image = tf.expand_dims(image, 0)
         
-        with self._file_writer.as_default(), tf.contrib.summary.always_record_summaries():
-            tf.contrib.summary.scalar('val_f1', _val_f1, step=epoch)
-            tf.contrib.summary.scalar('val_precision', _val_precision, step=epoch)
-            tf.contrib.summary.scalar('val_recall', _val_recall, step=epoch)
-            tf.compat.v2.summary.image("Confusion Matrix", image, step=epoch)
+        with self._file_writer.as_default():
+            tf.summary.scalar('val_f1', _val_f1, step=epoch)
+            tf.summary.scalar('val_precision', _val_precision, step=epoch)
+            tf.summary.scalar('val_recall', _val_recall, step=epoch)
+            tf.summary.image("Confusion Matrix", image, step=epoch)
 
 
 # track memory usage and issues in keras/tensorflow
@@ -185,10 +185,10 @@ def run_experiment(config, reproduce_result=None):
 	def my_metrics(_run, logs):
 		if not config.get('use_capsnet'):
 			_run.log_scalar("loss", float(logs.get('loss')))
-			_run.log_scalar("acc", float(logs.get('acc')))
+			_run.log_scalar("acc", float(logs.get('accuracy')))
 			_run.log_scalar("val_loss", float(logs.get('val_loss')))
-			_run.log_scalar("val_acc", float(logs.get('val_acc')))
-			_run.result = float(logs.get('val_acc'))
+			_run.log_scalar("val_acc", float(logs.get('val_accuracy')))
+			_run.result = float(logs.get('val_accuracy'))
 
 	# a callback to log to Sacred, found here: https://www.hhllcks.de/blog/2018/5/4/version-your-machine--models-with-sacred
 	class LogMetrics(Callback):
